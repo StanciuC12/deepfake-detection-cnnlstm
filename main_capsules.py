@@ -15,23 +15,25 @@ from capsulenet import CapsuleNet, CapsuleLoss
 # torchfunc.cuda.reset()
 
 
-
-dataset_adr = r'E:\saved_img'
-train_file_path = r'train_test_combined.xlsx'
+# dataset_adr = r'E:\saved_img'
+# train_file_path = r'train_test_combined.xlsx'
+dataset_adr = r'F:\ff++\saved_images' # r'E:\saved_img'
+train_file_path = r'train_test_split.xlsx'
 img_type = 'fullface'
-dataset = 'FF'
-model_type = 'capsule'
+
+dataset = 'FF++'
+model_type = 'capsule_features'
 ######################
-lr = 1e-5
+lr = 1e-3
 #####################
-weight_decay = 1e-5
+weight_decay = 0
 nr_epochs = 15
 lr_decay = 0.9
 test_data_frequency = 1
-train_batch_size = 2
-test_batch_size = 2
+train_batch_size = 8
+test_batch_size = 8
 gradient_clipping_value = None #1
-model_param_adr = None#r'E:\saved_model\capsule-LSTM_fullface_epoch_3_param_celebDF_206_021.pkl'    # None if new training
+model_param_adr = None #r'E:\saved_model\Capsule\celebDF\capsule_low_param_fullface_epoch_14_param_celebDF_271_319.pkl'    # None if new training
 
 transf = transforms.Compose([
     transforms.ToTensor(),
@@ -45,14 +47,18 @@ elif model_type == 'capsule-LSTM':
     from data_loader import DeepFakeDataset
 
 
-data_train = DeepFakeDataset(root_dir=dataset_adr, train_file=train_file_path, transform=transf, batch_size=train_batch_size, train=True, image_type=img_type, dataset=dataset)
-data_test = DeepFakeDataset(root_dir=dataset_adr, train_file=train_file_path, transform=transf, batch_size=test_batch_size, train=False, image_type=img_type, dataset=dataset)
+data_train = DeepFakeDataset(root_dir=dataset_adr, train_file=train_file_path, transform=transf,
+                             batch_size=train_batch_size, train=True, image_type=img_type, dataset=dataset)
+data_test = DeepFakeDataset(root_dir=dataset_adr, train_file=train_file_path, transform=transf,
+                            batch_size=test_batch_size, train=False, image_type=img_type, dataset=dataset)
+
+
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print('Device: ', device)
 
-model = CapsuleNet(architecture=model_type)
+model = CapsuleNet(architecture=model_type, dataset=dataset)
 model.to(device)
 
 print("# parameters:", sum(param.numel() for param in model.parameters()))
@@ -93,23 +99,18 @@ for epoch in range(epoch_done + 1, nr_epochs+1):
                 data_train.augment_dataset()
                 data_train.shuffle()
 
-        for i in range(int(len(data_train)/4)):
+        for i in range(int(len(data_train))):
 
                 t = time.time()
                 data, targets = data_train[i]
                 data, targets = data.to(device), targets.to(device)
 
-                outputs_gpu = model(data)
+                outputs_gpu, _ = model(data)
 
                 outputs = outputs_gpu.to('cpu').flatten()
                 targets = targets.to('cpu')
 
-                try:
-                    loss = criterion(outputs, targets)
-                except:
-                    print(outputs)
-                    print(targets)
-                    continue
+                loss = criterion(outputs, targets)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -176,7 +177,7 @@ for epoch in range(epoch_done + 1, nr_epochs+1):
 
                         with torch.no_grad():
 
-                                outputs_gpu = model(data)
+                                outputs_gpu, _ = model(data)
                                 outputs = outputs_gpu.to('cpu').flatten()
                                 targets = targets.to('cpu')
                                 loss = criterion(outputs, targets)

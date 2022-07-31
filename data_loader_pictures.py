@@ -107,7 +107,7 @@ class DeepFakeDataset(torch.utils.data.Dataset):
         self.label_df = pd.concat([lesser_class] * 3 + [bigger_class.sample(frac=1).iloc[0:min_bigger_class]],
                                   ignore_index=True).sample(frac=1).reset_index(drop=True)
 
-        print(len(lesser_class) * 3 , 'Real Samples', min_bigger_class, 'Fake Samples')
+        print(len(lesser_class) * 3, 'Real Samples', min_bigger_class, 'Fake Samples')
 
 
 

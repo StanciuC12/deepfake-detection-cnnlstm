@@ -11,7 +11,7 @@ import pandas as pd
 
 
 
-model_type = 'resnet-50-LSTM'
+model_type = 'Xception-LSTM'
 dataset_adr = r'E:\saved_img'
 train_file_path = r'train_test_combined.xlsx'
 img_type = 'fullface'

@@ -18,16 +18,16 @@ from tqdm import tqdm
 epsilon = 0.000000000001
 
 class VggExtractor(nn.Module):
-    def __init__(self, train=False):
+    def __init__(self, train=False, freeze_gradient=True, total_used_layers=18):
         super(VggExtractor, self).__init__()
 
-        self.vgg_1 = self.Vgg(models.vgg19(pretrained=True), 0, 18)
+        self.vgg_1 = self.Vgg(models.vgg19(pretrained=True), 0, total_used_layers)
         if train:
             self.vgg_1.train(mode=True)
-            self.freeze_gradient()
+            if freeze_gradient:
+                self.freeze_gradient()
         else:
             self.vgg_1.eval()
-
 
     def Vgg(self, vgg, begin, end):
         features = nn.Sequential(*list(vgg.features.children())[begin:(end+1)])
@@ -76,7 +76,7 @@ class CapsuleLayer(nn.Module):
                     delta_logits = (priors * outputs).sum(dim=-1, keepdim=True)
                     logits = logits + delta_logits
         else:
-            outputs = [capsule(x).view(x.size(0), -1, 1) for capsule in self.capsules]
+            outputs = [capsule(x).view(x.size(0), -1, 1) for capsule in self.capsules]  # astea sunt ELEMENZTE DE CAPSULE??????
             outputs = torch.cat(outputs, dim=-1)
             outputs = self.squash(outputs)
 
@@ -90,41 +90,107 @@ class CapsuleLayer(nn.Module):
 
 
 class CapsuleNet(nn.Module):
-    def __init__(self, architecture='capsule', dataset='FF'):
+    def __init__(self, architecture, dataset, freeze_gradient_extractor=True):
         super(CapsuleNet, self).__init__()
 
         self.architecture = architecture
         self.dataset = dataset
 
-        if architecture == 'capsule' and dataset == 'celebDF':
-            self.conv1 = VggExtractor()
+        if self.architecture == 'capsule' and self.dataset == 'celebDF':
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
             self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=256, out_channels=32,
                                                  kernel_size=9, stride=2)
             self.digit_capsules = CapsuleLayer(num_capsules=10, num_route_nodes=32 * 15 * 15, in_channels=8,
                                                out_channels=16)
 
-            self.out_layers = nn.Sequential(nn.Linear(160, 128), nn.ReLU(), nn.Dropout(0.7), nn.Linear(128, 1), nn.Sigmoid())
+            self.out_layers = nn.Sequential(nn.Linear(160, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1), nn.Sigmoid())
 
-        elif architecture == 'capsule' and dataset == 'FF':
-            self.conv1 = VggExtractor()
+        elif self.architecture == 'capsule' and self.dataset == 'FF':
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
             self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=256, out_channels=32,
                                                  kernel_size=9, stride=2)
             self.digit_capsules = CapsuleLayer(num_capsules=2, num_route_nodes=32 * 15 * 15, in_channels=8,
                                                out_channels=16)
 
-        elif architecture == 'capsule-LSTM':
-            self.conv1 = VggExtractor()
+        elif self.architecture == 'capsule-LSTM':
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
             self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=256, out_channels=32,
                                                  kernel_size=9, stride=4)
             self.digit_capsules = CapsuleLayer(num_capsules=16, num_route_nodes=32 * 8 * 8, in_channels=8,
                                                out_channels=16)
             self.lstm = nn.LSTM(input_size=256, hidden_size=256, num_layers=2)
             self.fc1 = nn.Linear(256, 128)
-            self.dropout = nn.Dropout(p=0.7)
+            self.dropout = nn.Dropout(p=0.3)
             self.fc2 = nn.Linear(128, 1)
             self.sigmoid = nn.Sigmoid()
 
+        elif self.architecture == 'test':
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
+            self.conv2 = nn.Conv2d(in_channels=256, out_channels=32, kernel_size=7, stride=4)
+            self.primary_capsules = CapsuleLayer(num_capsules=1024, num_route_nodes=-1, in_channels=32, out_channels=8,
+                                                 kernel_size=5, stride=2, num_iterations=5)  # Am adaugata num_iterations=5 mai parziu pt experiment
+            self.digit_capsules = CapsuleLayer(num_capsules=16, num_route_nodes=32, in_channels=1024,
+                                               out_channels=16, num_iterations=5)
+            self.out_layers = nn.Sequential(nn.Linear(16*16, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1), nn.Sigmoid())
 
+
+        elif self.architecture == 'capsule_features':
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
+            self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=256, out_channels=32,
+                                                 kernel_size=9, stride=2, num_iterations=5)  # Am adaugata num_iterations=5 mai parziu pt experiment
+            self.digit_capsules = CapsuleLayer(num_capsules=16, num_route_nodes=32 * 15 * 15, in_channels=8,
+                                               out_channels=16, num_iterations=5)
+            self.out_layers = nn.Sequential(nn.Linear(16*16, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1), nn.Sigmoid())
+
+        elif self.architecture == 'capsule_low_param':
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
+            self.conv2 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=5, stride=2)
+            self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=64, out_channels=32,
+                                                 kernel_size=5, stride=2, num_iterations=5)
+            self.digit_capsules = CapsuleLayer(num_capsules=16, num_route_nodes=1568, in_channels=8,
+                                               out_channels=16, num_iterations=5)
+            self.out_layers = nn.Sequential(nn.Linear(16*16, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1), nn.Sigmoid())
+
+        elif self.architecture == r'capsule_features_no_dropout':
+
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
+            self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=256, out_channels=32,
+                                                 kernel_size=9, stride=2)
+            self.digit_capsules = CapsuleLayer(num_capsules=16, num_route_nodes=32 * 15 * 15, in_channels=8,
+                                               out_channels=16)
+            self.out_layers = nn.Sequential(nn.Linear(16*16, 128), nn.ReLU(), nn.Linear(128, 1), nn.Sigmoid())
+
+        elif self.architecture == 'capsule_low_param_8caps':
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
+            self.conv2 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=5, stride=2)
+            self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=64, out_channels=32,
+                                                 kernel_size=5, stride=2, num_iterations=5)
+            self.digit_capsules = CapsuleLayer(num_capsules=16, num_route_nodes=1568, in_channels=8,
+                                               out_channels=8)
+            self.out_layers = nn.Sequential(nn.Linear(8*16, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1), nn.Sigmoid())
+
+        elif self.architecture == 'capsule_lower_param_4caps':  # asta e low param din paper
+            # cu weight_decay = 0
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor, total_used_layers=10)
+            self.conv2 = nn.Sequential(nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3, stride=2),
+                                       nn.ReLU(), nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=2))
+            self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=64, out_channels=16,
+                                                 kernel_size=5, stride=2, num_iterations=5)
+            self.digit_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=784, in_channels=8,
+                                               out_channels=16, num_iterations=5)
+            self.out_layers = nn.Sequential(nn.Dropout(0.2), nn.Linear(128, 1), nn.Sigmoid())
+
+        elif self.architecture == 'capsule_lowest_param':
+            # cu weight_decay = 0
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor, total_used_layers=8)
+            self.conv2 = nn.Conv2d(in_channels=128, out_channels=16, kernel_size=7, stride=4)
+            self.conv3 = nn.Conv2d(in_channels=16, out_channels=8, kernel_size=5, stride=3)
+            self.digit_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=121, in_channels=8,
+                                               out_channels=16)
+            self.out_layers = nn.Sequential(nn.Dropout(0.2), nn.Linear(128, 1), nn.Sigmoid())
+
+        else:
+            raise ValueError("Not a known architecture!")
 
     def forward(self, x):
 
@@ -147,6 +213,7 @@ class CapsuleNet(nn.Module):
                 else:
                     x = x.reshape(-1)
                 out = self.out_layers(x)
+
                 return out
 
         elif self.architecture == 'capsule-LSTM':
@@ -168,6 +235,77 @@ class CapsuleNet(nn.Module):
 
             return xfc_out
 
+        elif self.architecture == 'capsule_low_param' or self.architecture == 'capsule_low_param_8caps' \
+                or self.architecture == 'capsule_lower_param_4caps':
+
+            x = F.relu(self.conv1(x), inplace=True)
+            x = F.relu(self.conv2(x))
+            x = self.primary_capsules(x)
+            x = self.digit_capsules(x).squeeze().transpose(0, 1)
+            features = x
+
+            if len(x.shape) > 2:
+                x = x.reshape(x.size(0), -1)
+            else:
+                x = x.reshape(-1)
+            out = self.out_layers(x)
+
+            return out, features
+
+        elif self.architecture == 'capsule_features' or self.architecture == 'capsule_features_no_dropout':
+
+            x = F.relu(self.conv1(x), inplace=True)  # TODO: is relu here?
+            x = self.primary_capsules(x)
+            x = self.digit_capsules(x).squeeze().transpose(0, 1)
+            features = x
+
+            #  x[0] -iamginea 0; x[0][0] - capsula 0 imaginea 0;
+            # x[:, :, 0] - iau feature-ul 0 de la toate imaginile + toate capsulele
+            #  torch.Size([16, 7200, 8, 16]) - features
+            #torch.Size([16, 18, 256, 16])
+
+            if len(x.shape) > 2:
+                x = x.reshape(x.size(0), -1)
+            else:
+                x = x.reshape(-1)
+            out = self.out_layers(x)
+
+            return out, features
+
+        elif self.architecture == 'test':  #  arhitectura normala cu multe capsule mici
+
+            x = F.relu(self.conv1(x), inplace=True)
+            x = F.relu(self.conv2(x), inplace=True)
+            x = self.primary_capsules(x)
+            x = self.digit_capsules(x).squeeze().transpose(0, 1)
+
+
+            if len(x.shape) > 2:
+                x = x.reshape(x.size(0), -1)
+            else:
+                x = x.reshape(-1)
+            out = self.out_layers(x)
+
+            return out, None
+
+        elif self.architecture == 'capsule_lowest_param':
+
+            x = F.relu(self.conv1(x))
+            x = F.relu(self.conv2(x))
+            x = F.relu(self.conv3(x))
+            # primary capsules
+            x = x.reshape(x.shape[0], -1, 8)
+            x = self.digit_capsules(x).squeeze().transpose(0, 1)
+            features = x
+
+            if len(x.shape) > 2:
+                x = x.reshape(x.size(0), -1)
+            else:
+                x = x.reshape(-1)
+            out = self.out_layers(x)
+
+            return out, features
+
 
 class CapsuleLoss(nn.Module):
 
@@ -184,3 +322,8 @@ class CapsuleLoss(nn.Module):
         margin_loss = margin_loss.sum()
 
         return (margin_loss) / len_images
+
+
+if __name__ == "__main__":
+
+    a = VggExtractor()

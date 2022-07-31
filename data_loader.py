@@ -6,9 +6,11 @@ from PIL import Image
 import torch.utils.data
 import numpy as np
 
+
 class DeepFakeDataset(torch.utils.data.Dataset):
 
-    def __init__(self, root_dir, train_file, batch_size=1, transform=None, train=True, image_type='fullface', dataset='all'):
+    def __init__(self, root_dir, train_file, batch_size=1, transform=None,
+                 train=True, image_type='fullface', dataset='all', frames=20, skip=4, image_dim=(3, 299, 299)):
 
         self.root_dir = root_dir
         self.train = train
@@ -18,6 +20,9 @@ class DeepFakeDataset(torch.utils.data.Dataset):
         self.image_type = image_type
         self.dataset = dataset
         self.label_df = pd.read_excel(os.path.join(self.root_dir, self.train_file_path))
+        self.frames = frames
+        self.skip = skip
+        self.image_dim = image_dim
         if self.train:
             self.label_df = self.label_df[self.label_df['TrainTest'] == 0].reset_index(drop=True)
             self.label_df = self.label_df.iloc[0:int(len(self.label_df) / self.batch_size) * self.batch_size]
@@ -32,7 +37,7 @@ class DeepFakeDataset(torch.utils.data.Dataset):
         self.label_df_original = copy.deepcopy(self.label_df)
         self.classes = list(self.label_df['ClassId'].unique())
 
-    def __getitem__(self, idx, frames=20, skip=4, image_dim=(3, 299, 299)):
+    def __getitem__(self, idx):
         """Return (image, target) after resize and preprocessing."""
 
         folders = [os.path.join(self.root_dir, x) for x in
@@ -44,7 +49,7 @@ class DeepFakeDataset(torch.utils.data.Dataset):
 
             empty_folder = False
             if os.path.isdir(folder):
-                images = [x for x in os.listdir(folder) if self.image_type in x][::skip]
+                images = [x for x in os.listdir(folder) if self.image_type in x][::self.skip]
             else:
                 images = []
 
@@ -52,8 +57,8 @@ class DeepFakeDataset(torch.utils.data.Dataset):
                 empty_folder = True
 
             if not empty_folder:
-                if len(images) > frames:
-                    images = images[0:frames]
+                if len(images) > self.frames:
+                    images = images[0:self.frames]
 
                 X_time = []
                 for img_name in images:
@@ -73,9 +78,9 @@ class DeepFakeDataset(torch.utils.data.Dataset):
             else:
                 X_time = torch.Tensor([])
 
-            if len(X_time) < frames:
-                to_add_blank_nr = frames - len(X_time)
-                blank = torch.ones(image_dim) * -1
+            if len(X_time) < self.frames:
+                to_add_blank_nr = self.frames - len(X_time)
+                blank = torch.ones(self.image_dim) * -1
                 to_add_list = [blank] * to_add_blank_nr
 
                 X_time = torch.cat((X_time, torch.stack(to_add_list)))
@@ -105,6 +110,39 @@ class DeepFakeDataset(torch.utils.data.Dataset):
         self.label_df = pd.concat([lesser_class, lesser_class, lesser_class, bigger_class.sample(frac=1).iloc[0:min_bigger_class]],
                                   ignore_index=True).sample(frac=1).reset_index(drop=True)
 
+
+if __name__ == "__main__":
+
+    from torchvision.transforms import transforms
+
+    dataset_adr = r'F:\ff++\saved_images'  # r'E:\saved_img'
+    train_file_path = r'train_test_split.xlsx'
+    img_type = 'fullface'
+
+    dataset = 'FF++'
+    model_type = 'capsule_features'
+    ######################
+    lr = 1e-3
+    #####################
+    weight_decay = 0
+    nr_epochs = 15
+    lr_decay = 0.9
+    test_data_frequency = 1
+    train_batch_size = 8
+    test_batch_size = 8
+    gradient_clipping_value = None  # 1
+    model_param_adr = None  # r'E:\saved_model\Capsule\celebDF\capsule_low_param_fullface_epoch_14_param_celebDF_271_319.pkl'    # None if new training
+
+    transf = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        # Resnet and VGG19 expects to have data normalized this way (because pretrained)
+    ])
+
+    data_train = DeepFakeDataset(root_dir=dataset_adr, train_file=train_file_path, transform=transf,
+                                 batch_size=2, train=True, image_type=img_type, dataset=dataset, frames=300)
+
+    print('hellu')
 
 
 

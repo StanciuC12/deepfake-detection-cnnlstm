@@ -60,6 +60,4 @@ def calculate_accuracy(outputs, targets):
     return n_correct_elems / batch_size
 
 
-
 losses = AverageMeter()
-losses.update(3.5, 8)
