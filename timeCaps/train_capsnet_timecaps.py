@@ -1,3 +1,5 @@
+import os
+
 from data_loader import DeepFakeDataset
 import time
 from torchvision.transforms import transforms
@@ -17,9 +19,9 @@ if __name__ == "__main__":
     img_type = 'fullface'
 
     dataset = 'FF++'
-    model_type = 'capsule_timecaps'
+    model_type = 'capsule_timecaps_simple'
     ######################
-    lr = 1e-3
+    lr = 1e-4
     #####################3
     weight_decay = 0
     nr_epochs = 15
@@ -28,7 +30,7 @@ if __name__ == "__main__":
     train_batch_size = 8
     test_batch_size = 8
     gradient_clipping_value = None  # 1
-    model_param_adr = None  # r'E:\saved_model\Capsule\celebDF\capsule_low_param_fullface_epoch_14_param_celebDF_271_319.pkl'    # None if new training
+    model_param_adr = r'E:\saved_model\capsule_timecaps_simple_fullface_epoch_0_param_FF++_48_2040.pkl'    # None if new training
 
     transf = transforms.Compose([
         transforms.ToTensor(),
@@ -47,13 +49,19 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
     criterion = nn.BCELoss()
 
-    for epoch in range(0, nr_epochs + 1):
+    epoch_done = 0
+    if model_param_adr:
+        model.load_state_dict(torch.load(model_param_adr))
+        epoch_done = int(model_param_adr.split('_')[-5]) + 1
+
+    for epoch in range(epoch_done, nr_epochs + 1):
 
         print('Epoch: ', epoch)
         train_loss = 0.0
         predictions_vect = []
         targets_vect = []
         losses = []
+        batch_times = []
 
         model.train()
         data_train.shuffle()
@@ -82,7 +90,8 @@ if __name__ == "__main__":
             targets_vect.append(targets)
 
             batch_t = time.time() - t
-            train_loss += loss.item()
+            batch_times.append(batch_t)
+            train_loss = loss.item()
             losses.append(train_loss)
             avg_loss = np.mean(losses)
 
@@ -92,5 +101,13 @@ if __name__ == "__main__":
                 auc_train = '-'
 
             print('Minibatch: ' + str(i) + '/' + str(len(data_train)) + ' Loss: ' + str(avg_loss) +
-                  ' AUC total: ' + str(auc_train), ' Time elapsed:', batch_t * len(data_train) / 3600)
-            train_loss = 0.0
+                  ' AUC total: ' + str(auc_train),
+                  ' Est time/Epoch: ' + str(int(np.mean(batch_times) * len(data_train) // 3600)) + 'h' +
+                  str(int((np.mean(batch_times) * len(data_train) - 3600 * (np.mean(batch_times) * len(data_train) // 3600)) // 60)) + 'm')
+            #train_loss = 0.0
+
+
+        # Saving model
+        torch.save(model.state_dict(),
+                   os.path.join(r'E:\saved_model', model_type + '_' + img_type + '_epoch_' + str(epoch) + '_param_' + dataset + '_' +
+                                str(time.gmtime()[2]) + str(time.gmtime()[1]) + '_' + str(time.gmtime()[3]) + str(time.gmtime()[4]) + '.pkl'))
