@@ -114,11 +114,48 @@ class CapsuleNet(nn.Module):
             self.out_fc_2 = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1),
                                         nn.Sigmoid())
 
+        elif self.architecture == 'capsnet_timecaps_complex':
+
+            self.conv1 = VggExtractor(freeze_gradient=freeze_gradient_extractor)
+            self.conv2 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=5, stride=2)
+            self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, in_channels=64, out_channels=32,
+                                                 kernel_size=5, stride=2, num_iterations=5)
+            self.digit_capsules = CapsuleLayer(num_capsules=16, num_route_nodes=1568, in_channels=8,
+                                               out_channels=16, num_iterations=5)
+            self.out_layers_caps = nn.Sequential(nn.Linear(16 * 16, 256), nn.ReLU())
+
+            n_capsules = 8
+            self.time_capsules = CapsuleLayer(num_capsules=n_capsules, num_route_nodes=32, in_channels=256,
+                                              out_channels=32)
+            self.out_fc = nn.Sequential(nn.Linear(n_capsules * 32, 128), nn.ReLU(), nn.Dropout(0.3), nn.Linear(128, 1),
+                                        nn.Sigmoid())
 
         else:
             raise ValueError("Not a known architecture!")
 
     def forward(self, x):
+
+        if self.architecture == 'capsnet_timecaps_complex':
+
+            x = F.relu(self.conv1(x), inplace=True)
+            x = F.relu(self.conv2(x))
+            x = self.primary_capsules(x)
+            x = self.digit_capsules(x)
+            x = x.squeeze().transpose(0, 1)
+
+            if len(x.shape) > 2:
+                x = x.reshape(x.size(0), -1)
+            else:
+                x = x.reshape(-1)
+
+            x = self.out_layers_caps(x)
+
+            primary_time_capsules = x.reshape(1, x.shape[0], x.shape[1])
+            primary_time_capsules = self.cl.squash(tensor=primary_time_capsules)
+            secondary_time_capsules = self.time_capsules(primary_time_capsules).squeeze()
+            out = self.out_fc(secondary_time_capsules.reshape(-1))
+
+            return out
 
         if self.architecture == 'capsule_timecaps':
 

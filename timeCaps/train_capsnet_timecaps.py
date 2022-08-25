@@ -19,7 +19,7 @@ if __name__ == "__main__":
     img_type = 'fullface'
 
     dataset = 'FF++'
-    model_type = 'capsule_timecaps_simple'
+    model_type = 'capsnet_timecaps_complex'
     ######################
     lr = 1e-4
     #####################3
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     train_batch_size = 8
     test_batch_size = 8
     gradient_clipping_value = None  # 1
-    model_param_adr = r'E:\saved_model\capsule_timecaps_simple_fullface_epoch_0_param_FF++_48_2040.pkl'    # None if new training
+    model_param_adr = None #r'E:\saved_model\capsule_timecaps_simple_fullface_epoch_0_param_FF++_48_2040.pkl'    # None if new training
 
     transf = transforms.Compose([
         transforms.ToTensor(),
