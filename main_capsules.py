@@ -30,7 +30,7 @@ weight_decay = 0
 nr_epochs = 15
 lr_decay = 0.9
 test_data_frequency = 1
-train_batch_size = 32
+train_batch_size = 16
 test_batch_size = 8
 gradient_clipping_value = None #1
 model_param_adr = None #r'E:\saved_model\Capsule\celebDF\capsule_low_param_fullface_epoch_14_param_celebDF_271_319.pkl'    # None if new training
@@ -79,6 +79,22 @@ optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
 #criterion = CapsuleLoss()
 criterion = nn.BCELoss()
 
+# Adding model!!!#############################################
+mean = (0.485, 0.456, 0.406)
+std = (0.229, 0.224, 0.225)
+denorm = transforms.Normalize(
+mean=[-m / s for m, s in zip(mean, std)],
+std=[1.0 / s for s in std],
+# always_apply=True,
+# max_pixel_value=1.0
+)
+from timeCaps.ae import UNet
+
+model_redo = UNet(n_channels=3, n_classes=3)
+model_redo.to('cuda')
+model_redo.load_state_dict(torch.load(r'E:\saved_model\AE_unet_fullface_epoch_4_param_FF++_1310_2315.pkl'))
+#########################################################
+
 if epoch_done != 0:
         print('Starting from Epoch ', epoch_done+1)
 
@@ -104,6 +120,13 @@ for epoch in range(epoch_done + 1, nr_epochs+1):
                 t = time.time()
                 data, targets = data_train[i]
                 data, targets = data.to(device), targets.to(device)
+
+                #########################################adding the model
+                with torch.no_grad():
+                        data_redo = model_redo(data[:, :, 22:278, 22:278])
+                        data[:, :, 22:278, 22:278] = data_redo
+
+                #########################################################
 
                 outputs_gpu, _ = model(data)
 

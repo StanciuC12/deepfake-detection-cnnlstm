@@ -24,7 +24,7 @@ dataset_model = 'FF++'
 model_type = 'capsule_features'
 test_batch_size = 1
 test_split_batch_size = 4
-model_param_adr = r'E:\saved_model\capsule_features_fullface_epoch_9_param_FF++_166_2228.pkl' #r'E:\saved_model\capsule_features_fullface_epoch_7_param_celebDF_172_1647.pkl'
+model_param_adr = r'E:\saved_model\capsule_features_fullface_epoch_6_param_FF++_1410_142.pkl' #r'E:\saved_model\capsule_features_fullface_epoch_7_param_celebDF_172_1647.pkl'
 
 transf = transforms.Compose([
     transforms.ToTensor(),
